@@ -1,44 +1,44 @@
-import 'package:PiliPlus/models/model_video.dart';
-import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:get/get.dart';
+import 'package:piliplusx/utils/storage.dart'; // 假设这是项目的存储工具类
 
-abstract final class RecommendFilter {
-  static int minDurationForRcmd = Pref.minDurationForRcmd;
-  static int minPlayForRcmd = Pref.minPlayForRcmd;
-  static int minLikeRatioForRecommend = Pref.minLikeRatioForRecommend;
-  static bool exemptFilterForFollowed = Pref.exemptFilterForFollowed;
-  static bool applyFilterToRelatedVideos = Pref.applyFilterToRelatedVideos;
-  static RegExp rcmdRegExp = RegExp(
-    Pref.banWordForRecommend,
-    caseSensitive: false,
-  );
-  static bool enableFilter = rcmdRegExp.pattern.isNotEmpty;
+class TagBlockManager {
+  static const String _key = 'blocked_tags_list';
+  
+  // 使用 GetX 的 RxList 实现响应式，由于设置页可能需要实时更新
+  static final RxList<String> blockedTags = <String>[].obs;
 
-  static bool filter(BaseVideoItemModel videoItem) {
-    //由于相关视频中没有已关注标签，只能视为非关注视频
-    if (videoItem.isFollowed && exemptFilterForFollowed) {
+  // 初始化（在 main.dart 或 App 启动时调用）
+  static void init() {
+    final List<dynamic>? stored = Storage.getList(_key); // 根据实际 Storage API 调整
+    if (stored != null) {
+      blockedTags.addAll(stored.cast<String>());
+    }
+  }
+
+  // 添加屏蔽标签
+  static void addTag(String tag) {
+    if (tag.isNotEmpty && !blockedTags.contains(tag)) {
+      blockedTags.add(tag);
+      _save();
+    }
+  }
+
+  // 移除屏蔽标签
+  static void removeTag(String tag) {
+    blockedTags.remove(tag);
+    _save();
+  }
+
+  // 检查是否包含屏蔽标签
+  static bool isBlocked(List<String>? videoTags) {
+    if (videoTags == null || videoTags.isEmpty || blockedTags.isEmpty) {
       return false;
     }
-    return filterAll(videoItem);
+    // 取交集，如果有交集则说明命中屏蔽词
+    return videoTags.any((tag) => blockedTags.contains(tag));
   }
 
-  static bool filterLikeRatio(int? like, int? view) {
-    if (view != null) {
-      return (view > -1 && view < minPlayForRcmd) ||
-          (like != null &&
-              like > -1 &&
-              like * 100 < minLikeRatioForRecommend * view);
-    }
-    return false;
-  }
-
-  static bool filterTitle(String title) {
-    return (enableFilter && rcmdRegExp.hasMatch(title));
-  }
-
-  static bool filterAll(BaseVideoItemModel videoItem) {
-    return (videoItem.duration > 0 &&
-            videoItem.duration < minDurationForRcmd) ||
-        filterLikeRatio(videoItem.stat.like, videoItem.stat.view) ||
-        filterTitle(videoItem.title);
+  static void _save() {
+    Storage.setList(_key, blockedTags.toList()); // 根据实际 Storage API 调整
   }
 }
